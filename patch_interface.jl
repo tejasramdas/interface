@@ -25,10 +25,14 @@ c=figure[1:2,3] = GridLayout(tellwidth=false)
 ax_v=Axis(a[1,1],ylabel="Voltage",xlims=(-100,0), ylims=(-1,1))
 ax_i=Axis(b[1,1],xlabel="Time",ylabel="Current",xlims=(-100,0), ylims=(-1,1))
 
-mode_label=Label(c[5,1], "Mode: "*@lift(voltage_to_mode($mode)[2])[], textsize=24, tellheight=false, tellwidth=false) 
+mode_label=Label(c[5,1], "Mode: "*@lift(voltage_to_mode($mode)[2])[], textsize=24) 
 
-switch=Button(c[4,1], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellheight=false, tellwidth=false) 
-seal_test_button = Button(c[1,1], label="Run seal test", textsize=30, tellheight=false,tellwidth=false)
+
+seal_test_rm= Label(c[2,1], "R_m: N/A", textsize =24)
+seal_test_rs= Label(c[2,2], "R_s: N/A", textsize =24)
+
+switch=Button(c[4,1], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30) 
+seal_test_button = Button(c[1,1], label="Run seal test", textsize=30)
 
 
 
