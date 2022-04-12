@@ -1,8 +1,51 @@
 using GLMakie, NIDAQ
 
+
+#NIDAQ SETUP
+a_in=analog_input("Dev1/ai0:2")
+a_out=analog_output("Dev1/ao0")
+
+
+#CONSTANTS
+OUT_DT=getproperties(a_out, "Dev1/ai0")[..] #FIX
+display_time_points=100
+
+
+#HELPER FUNCTIONS
+function voltage_to_mode(x)
+	axo_mode = [5, 2, 1, 4, 0, 3]
+	axo_desc = ["I-Clamp Fast", "I-Clamp", "I=0", "Track", "N/A", "V-Clamp"]
+	m=Int(round(x))
+	return axo_mode[m], axo_desc[m]
+end
+
+function generate_pulse(width, amplitude, number)
+	x=zeros(Int(round(width/DT)))
+	x=vcat(x, zeros(Int(round(width/DT))).+amplitude)
+	out=x
+	for i in 1:number
+		out=vcat(out,x)
+	return out
+end
+
+function res_test(a_in,a_out)
+	if voltage_to_mode(mode[])[1]==3
+		stim=generate_pulse(100, 0.25, 5)
+		NIDAQ.write(a_out, stim)
+		current=NIDAQ.read(a_in, "LENGTH OF INPUT") #fix
+		# get peak after x ms
+		# divide
+		# return
+	else
+		print("Change mode to V-Clamp.")
+	end
+end
+
+
 #OBSERVABLES
 mode = Observable(5.0)
 recording=Observable(false)
+time_index=Observable(display_time_points)
 
 #PLOT ELEMENTS
 figure=Figure(backgroundcolor=RGBf(0.8,0.8,0.8),resolution=(1200,900))
@@ -25,57 +68,22 @@ switch=Button(c[4,1], label=@lift($recording ? "Stop recording" : "Start recordi
 seal_test_button = Button(c[1,1], label="Run seal test", textsize=30)
 
 
-
-#HELPER FUNCTIONS
-function voltage_to_mode(x)
-	axo_mode = [5, 2, 1, 4, 0, 3]
-	axo_desc = ["I-Clamp Fast", "I-Clamp", "I=0", "Track", "N/A", "V-Clamp"]
-	m=Int(round(x))
-	return axo_mode[m], axo_desc[m]
-end
-
-function generate_pulse(width, amplitude, number)
-	x=zeros(Int(round(width/DT)))
-	x=vcat(x, zeros(Int(round(width/DT))).+amplitude)
-	out=x
-	for i in 1:number
-		out=vcat(out,x)
-	return out
-end
-
-function seal_test(a_in,a_out)
-	if voltage_to_mode(mode[])[1]==3
-		stim=generate_pulse(100, 0.25, 5)
-		NIDAQ.write(a_out, stim)
-		current=NIDAQ.read(a_in, "LENGTH OF INPUT") #fix
-
-	else
-		print("Change mode to V-Clamp.")
-
-
+#LISTENERS
 on(switch.clicks) do x
 	recording[] = 1-recording[]
 #	println("Pressed")
 end
 
-
-on_width, offwidth, number, high_amplitude, low_amplitude
-frequency, cycle_time
-OUT_DT=getproperties(a_out, "Dev1/ai0")[..] #FIX
-
-display_time_points=100
-
-v_vec=zeros(display_time_points)
-i_vec=zeros(display_time_points)
-t_vec=Vector(1:display_timepoints)*0.01
-
-
 lines!(ax_v,@lift(t_vec[$time_index-display_time_points:$time_index]-t_vec[$time_index],v_vec[$time_index-display_time_points:$time_index]))
 lines!(ax_i,@lift(t_vec[$time_index-display_time_points:$time_index]-t_vec[$time_index],i_vec[$time_index-display_time_points:$time_index]))
 
 
+#DATA
+v_vec=zeros(display_time_points)
+i_vec=zeros(display_time_points)
+t_vec=Vector(1:display_timepoints)*0.01
+m_vec=zeros(display_time_points.+5 #initialize mode to N/A
 
-time_index=Observable(display_time_points)
 
 for i in 1:10000
 	datum = NIDAQ.read(daq_input)
