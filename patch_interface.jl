@@ -1,15 +1,20 @@
-using GLMakie, NIDAQ
-
-
-#NIDAQ SETUP
-a_in=analog_input("Dev1/ai0:2")
-a_out=analog_output("Dev1/ao0")
+using GLMakie, NIDAQ, ThreadPools
 
 
 #CONSTANTS
-OUT_DT=getproperties(a_out, "Dev1/ai0")[..] #FIX
-display_time_points=100
+SAMPLE_RATE=10000
+DISPLAY_TS=SAMPLE_RATE
+DT=1/SAMPLE_RATE
+READ_RATE=1000
+PLOT_TS=20000 #should be higher than read rate so that the whole plot does not get overwritten
 
+#NIDAQ SETUP
+a_in=analog_input("Dev2/ai0:2")
+a_out=analog_output("Dev2/ao0")
+
+
+NIDAQ.CfgSampClkTiming(a_in.th, convert(Ref{UInt8},b""), SAMPLE_RATE, NIDAQ.Val_Rising, NIDAQ.Val_ContSamps, SAMPLE_RATE)
+NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b""), SAMPLE_RATE, NIDAQ.Val_Rising, NIDAQ.Val_FiniteSamps, SAMPLE_RATE)
 
 #HELPER FUNCTIONS
 function voltage_to_mode(x)
@@ -20,11 +25,13 @@ function voltage_to_mode(x)
 end
 
 function generate_pulse(width, amplitude, number)
-	x=zeros(Int(round(width/DT)))
-	x=vcat(x, zeros(Int(round(width/DT))).+amplitude)
+    x=zeros(Int(round(SAMPLE_RATE*width)))
+	x=vcat(x, x.+amplitude)
 	out=x
-	for i in 1:number
+	for i in 2:number
 		out=vcat(out,x)
+    end
+    push!(out,0)
 	return out
 end
 
@@ -45,28 +52,34 @@ end
 #OBSERVABLES
 mode = Observable(5.0)
 recording=Observable(false)
-time_index=Observable(display_time_points)
+time_index=Observable(DISPLAY_TS)
 
 #PLOT ELEMENTS
 figure=Figure(backgroundcolor=RGBf(0.8,0.8,0.8),resolution=(1200,900))
 
 a=figure[1,1:2] = GridLayout()
 b=figure[2,1:2] = GridLayout()
-c=figure[1:2,3] = GridLayout(tellwidth=false)
+c=figure[1:2,3] = GridLayout()
 
 
-ax_v=Axis(a[1,1],ylabel="Voltage",xlims=(-100,0), ylims=(-1,1))
-ax_i=Axis(b[1,1],xlabel="Time",ylabel="Current",xlims=(-100,0), ylims=(-1,1))
+ax_i=Axis(a[1,1],ylabel="Voltage",xlims=(-DISPLAY_TS*DT,0), ylims=(-1,1))
+ax_o=Axis(b[1,1],xlabel="Time",ylabel="Current",xlims=(-DISPLAY_TS*DT,0), ylims=(-1,1))
 
-mode_label=Label(c[5,1], "Mode: "*@lift(voltage_to_mode($mode)[2])[], textsize=24) 
+mode_label=Label(c[5,1], "Mode: "*@lift(voltage_to_mode($mode)[2])[], textsize=24, tellwidth=false) 
 
 
-seal_test_rm= Label(c[2,1], "R_m: N/A", textsize =24)
-seal_test_rs= Label(c[2,2], "R_s: N/A", textsize =24)
+seal_test_rm= Label(c[2,1], "R_m: N/A", textsize =24, tellwidth=false)
+seal_test_rs= Label(c[2,2], "R_s: N/A", textsize =24, tellwidth=false)
 
-switch=Button(c[4,1], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30) 
-seal_test_button = Button(c[1,1], label="Run seal test", textsize=30)
+switch=Button(c[4,1], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellwidth=false) 
+seal_test_button = Button(c[1,1], label="Run seal test", textsize=30,tellwidth=false)
 
+
+#DATA
+i_vec=zeros(DISPLAY_TS)
+o_vec=zeros(DISPLAY_TS)
+t_vec=Vector(1:DISPLAY_TS)*0.01
+m_vec=zeros(DISPLAY_TS).+5 #initialize mode to N/A
 
 #LISTENERS
 on(switch.clicks) do x
@@ -74,27 +87,25 @@ on(switch.clicks) do x
 #	println("Pressed")
 end
 
-lines!(ax_v,@lift(t_vec[$time_index-display_time_points:$time_index]-t_vec[$time_index],v_vec[$time_index-display_time_points:$time_index]))
-lines!(ax_i,@lift(t_vec[$time_index-display_time_points:$time_index]-t_vec[$time_index],i_vec[$time_index-display_time_points:$time_index]))
+lines!(ax_i,t_vec,@lift(i_vec[$time_index-DISPLAY_TS+1:$time_index]))
+lines!(ax_o,t_vec,@lift(o_vec[$time_index-DISPLAY_TS+1:$time_index]))
 
 
-#DATA
-v_vec=zeros(display_time_points)
-i_vec=zeros(display_time_points)
-t_vec=Vector(1:display_timepoints)*0.01
-m_vec=zeros(display_time_points.+5 #initialize mode to N/A
-
-
+read_length=0
 for i in 1:10000
-	datum = NIDAQ.read(daq_input)
+	datum = NIDAQ.read(daq_input,READ_RATE)
 	if recording[]
-		#push!(v_vec,NIDAQ.read(daq_input)) #fix
-		#push!(t_vec,get_current_time()) #fix
-		if mode[] != Int(round(datum[end,3]))
-			println("Why would you change modes while recording!?!?!?")
-		end
+        push!(i_vec,datum[:,2])
+        push!(o_vec,datum[:,1])
+    end
+    read_length+=READ_RATE
+    if read_length>=PLOT_RATE
+        t_obs[]+=read_length
+		sleep(0.001)
+        read_length=0
+    end
+    if mode[] != Int(round(datum[end,3]))
+		println("Why would you change modes while recording!?!?!?")
 	end
 	mode[] = Int(round(datum[end, 3]))
-	sleep(0.2)
 end
-		

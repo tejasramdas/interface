@@ -1,0 +1,7 @@
+sudo touch /usr/src/linux-headers-$(uname -r)/include/config/modversions.h
+Install .deb
+sudo apt update
+sudo apt install ni-daqmx
+sudo dkms autoinstall
+Reboot
+
