@@ -13,6 +13,7 @@
  - Add more functions to reset things.
  - Connect stuff to buttons.
  - Label observable doesn't work so manually updating for now. 
+ - I/O clocks need to be synced properly but good enough for now.
 
 
 
