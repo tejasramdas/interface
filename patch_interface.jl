@@ -36,7 +36,6 @@ function reset_nidaq()
 	NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b""), SAMPLE_RATE, NIDAQ.Val_Rising, NIDAQ.Val_FiniteSamps, SAMPLE_RATE)
 	start(a_out)
 	NIDAQ.write(a_out,[0.0])
-	stop(a_out)
 end
 
 function reset()
@@ -71,23 +70,26 @@ end
 
 function res_test()
 	if recording[]==false && voltage_to_mode(mode[])[1]==3
+		println("SEAL TEST")
 		stim=generate_pulse(0.1, 0.5, 3)
 		recording[]=true
 		NIDAQ.write(a_out, stim)
-		sleep(1)
+		sleep(2)
 		recording[]=false
 		dat_i=i_vec[end-2*SAMPLE_RATE-500:end]	
 		dat_o=o_vec[end-2*SAMPLE_RATE-500:end]	
+		ser_res=10^3*(0.5/50)/maximum(dat_o)
+		println(ser_res)
 	else
-		print("Stop recording and/or change mode to V-Clamp.")
+		println("Stop recording and/or change mode to V-Clamp.")
 	end
 end
 
 function read_loop()
 	read_length=0
-	start(a_out)
 	start(a_in)
 	read_length=0
+	println("STARTED")
 	while recording[]
 		data = NIDAQ.read(a_in)
 		global i_vec=vcat(i_vec,data[:,2])
@@ -106,8 +108,8 @@ function read_loop()
 		end
 		sleep(0.001)
 	end
+	println("STOPPED")
 	stop(a_in)
-	stop(a_out)
 end
 
 function reset_plot_lims()
@@ -131,9 +133,10 @@ ax_o=Axis(b[1,1],xlabel="Time",ylabel="Output",xlims=(X_L,X_H), ylims=(O_Y_L,O_Y
 seal_test_rm= Label(c[2,1], "R_m: N/A", textsize =24, tellwidth=false)
 seal_test_rs= Label(c[2,2], "R_s: N/A", textsize =24, tellwidth=false)
 
-mode_label=Label(c[5,:], "Mode: "*voltage_to_mode(mode[])[2],textsize=24, tellwidth=false) 
+mode_label=Label(c[10,:], "Mode: "*voltage_to_mode(mode[])[2],textsize=24, tellwidth=false) 
 
-switch=Button(c[4,:], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellwidth=false) 
+reset_plot=Button(c[3,:], label="Reset plot limits", textsize=30, tellwidth=false) 
+switch=Button(c[9,:], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellwidth=false) 
 seal_test_button = Button(c[1,:], label="Run seal test", textsize=30,tellwidth=false)
 
 
@@ -142,14 +145,26 @@ on(switch.clicks) do x
 	recording[] = 1-recording[]
 #	println("Pressed")
 end
+
 on(recording) do x
 	if x==1
 		@tspawnat 1 read_loop()
 	end
 end
-reset()
 
-lines!(ax_i,t_vec,@lift(i_vec[$time_index-DISPLAY_TS+1:$time_index]))
-lines!(ax_o,t_vec,@lift(o_vec[$time_index-DISPLAY_TS+1:$time_index]))
+on(seal_test_button.clicks) do x
+	@tspawnat 1 res_test()
+end
+
+on(reset_plot.clicks) do x
+	reset_plot_lims()
+end
+
+reset()
+reset_nidaq()
+reset_plot_lims()
+
+@tspawnat 1 lines!(ax_i,t_vec,@lift(i_vec[$time_index-DISPLAY_TS+1:$time_index]))
+@tspawnat 1 lines!(ax_o,t_vec,@lift(o_vec[$time_index-DISPLAY_TS+1:$time_index]))
 
 display(figure)

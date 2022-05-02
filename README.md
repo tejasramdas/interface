@@ -2,7 +2,6 @@
 ### Minimal interface for patch clamp recording using Axopatch/NIDAQ written in Julia/Makie
 
 
-
 ### TODOTODOTODO
  - add reset and save for data.
  - make sure time points of data map correctly. FIFO but dt is different for input and ouput looks like. Also how much memory does the card have? And is it possible to read until the end (i.e. clear memory after stopping the channel) (mostly solved but ned to test rigorously).
@@ -16,5 +15,12 @@
  - I/O clocks need to be synced properly but good enough for now.
 
 
-
-
+RIG
+ - Add LED Array
+ - Install camera
+ - Add headstage to manipulator
+ - Fabricate stage
+ - Get rid of picospritzer
+ - Connect air supply to table
+ - Get green filter for BAPTA
+ - Clean up
