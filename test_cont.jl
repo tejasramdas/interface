@@ -1,32 +1,76 @@
-using NIDAQ, GLMakie, ThreadPools
+using NIDAQ, GLMakie, ThreadPools, DataStructures
 
 
 a_in=analog_input("Dev2/ai1")
-vec=zeros(100000)
-t_obs=Observable(100000)
-
-
 NIDAQ.CfgSampClkTiming(a_in.th, convert(Ref{UInt8},b""), 10000, NIDAQ.Val_Rising, NIDAQ.Val_ContSamps, 50000)
 
-lines(@lift(vec[$t_obs-99999:$t_obs]))
+vec=CircularBuffer{Float64}(100000)
+fill!(vec,0)
 
-start(a_in)
-@tspawnat 1 for i in 1:1000
-	dat=NIDAQ.read(a_in)
-    vec=vcat(vec, dat)
-	t_obs[]+=size(dat)
-    sleep(0.001)
-end
-stop(a_in)
+t_obs=Observable(1)
 
+lines(@lift(vec[$t_obs:end]))
 
-
-using NIDAQ
 a_out=analog_output("Dev2/ao0")
 
-NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b""), 10000, NIDAQ.Val_Rising, NIDAQ.Val_FiniteSamps, 50000)
+NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b""), 1000, NIDAQ.Val_Rising, NIDAQ.Val_FiniteSamps, 6000)
+
+NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b""), 1000, NIDAQ.Val_Rising, NIDAQ.Val_ContSamps, 50000)
+
+NIDAQ.CfgSampClkTiming(a_out.th, convert(Ref{UInt8},b"Dev2/aiSampleClock"), 10000, NIDAQ.Val_Rising, NIDAQ.Val_FiniteSamps, 50000)
+
+@time begin
+start(a_in)
+sleep(0.001)
+x=size(NIDAQ.read(a_in))
+stop(a_in)
+end
+println(x)
+
+@time begin
+start(a_in)
+sleep(0.001)
+for i in 1:100
+	dat=NIDAQ.read(a_in)
+	append!(vec,dat)
+	notify(t_obs)
+    sleep(0.01)
+end
+stop(a_in)
+end
 
 
-square=repeat(vcat(zeros(1000).-0.5,zeros(1000).+0.5),5)
+stream=true
+t= @tspawnat 1 begin
+start(a_in)
+sleep(0.001)
+while stream
+	dat=NIDAQ.read(a_in)
+	append!(vec,dat)
+	#Core.println(i," ",vec[end])
+	notify(t_obs)
+    sleep(0.01)
+end
+stop(a_in)
+end
 
-NIDAQ.write(a_out,square)
+stream=false
+
+fetch(t)
+
+stop(a_in)
+
+sig=0.5.*sin.((1:5000).*(pi/2500))
+
+start(a_out)
+
+stop(a_out)
+
+stop(a_out)
+start(a_out)
+
+NIDAQ.write(a_out,[0.0])
+
+NIDAQ.write(a_out,sig)
+
+clear(a_out)
