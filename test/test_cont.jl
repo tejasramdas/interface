@@ -1,7 +1,12 @@
 using NIDAQ, GLMakie, ThreadPools, DataStructures
 
 
-a_in=analog_input("Dev2/ai1")
+a_in=analog_input("Dev2/ai0")
+
+a_in=analog_input("Dev2/ai2")
+
+a_in=analog_input("Dev2/ai3")
+
 NIDAQ.CfgSampClkTiming(a_in.th, convert(Ref{UInt8},b""), 10000, NIDAQ.Val_Rising, NIDAQ.Val_ContSamps, 50000)
 
 vec=CircularBuffer{Float64}(100000)
@@ -9,7 +14,12 @@ fill!(vec,0)
 
 t_obs=Observable(1)
 
-lines(@lift(vec[$t_obs:end]))
+f=Figure()
+a=Axis(f[1,1])
+
+ylims!(a,-1,12)
+
+lines!(a,@lift(vec[$t_obs:end]))
 
 a_out=analog_output("Dev2/ao0")
 
