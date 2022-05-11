@@ -6,7 +6,7 @@
  - Add reset and save for data.
  - Need to change timeout by writing custom wrapper for analog read.
  - I/O clocks need to be synced properly but good enough for now.
- - toggle between v-clamp and i-clamp (change labels/units)
+ - Toggle between v-clamp and i-clamp (change units and rescale read/write)
 
 
 ### RIG TODO

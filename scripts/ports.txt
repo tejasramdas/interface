@@ -1,6 +1,6 @@
 ACH0 (ai0): Scaled Output 
-ACH1 (ai1): Ext. Command Input (from DAC0OUT)
-ACH2 (ai2): Mode
+ACH1 (ai2): Ext. Command Input (from DAC0OUT)
+ACH2 (ai3): Mode
 
 DAC0OUT: Ext. Command Input (to amplifier and ACH1)
 

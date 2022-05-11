@@ -9,12 +9,26 @@ READ_RATE=100 #sampling from DAQ buffer (per read, not per unit time)
 PLOT_TS=500 #update plot after multiple reads. should be lower than DISPLAY_TS so that the whole plot does not get overwritten
 
 
+V_O = 0.05 # 1 V/20 mV = 0.05 V/mV
+I_O = 0.5 # 1 V/2 nA = 0.5 V/nA
+
+V_I = 1000 # 1 V/V = 1000 mV/V
+I_I = 1 # 1 nA/V
+
 X_L=-DISPLAY_TS*DT
 X_H=0
-O_Y_L=-1
-O_Y_H=1
-I_Y_L=-1
-I_Y_H=1
+
+
+V_O_Y_L=-70
+V_O_Y_H=30
+V_I_Y_L=-1
+V_I_Y_H=1
+
+I_O_Y_L=-1
+I_O_Y_H=1
+I_I_Y_L=-70
+I_I_Y_H=30
+
 
 #OBSERVABLES
 mode = Observable(5.0)
@@ -52,6 +66,8 @@ function reset_vars()
 	global t_vec=Vector(-DISPLAY_TS:-1)*DT
 	global i_buf=CircularBuffer{Float64}(DISPLAY_TS)
 	global o_buf=CircularBuffer{Float64}(DISPLAY_TS)
+	global I_c = V_I
+	global O_c = V_O
 	fill!(i_buf,0)
 	fill!(o_buf,0)
 	#RESET OBSERVABLE VALUES
@@ -61,19 +77,20 @@ function reset_vars()
 end
 
 function voltage_to_mode(x)
-	if x==0
-		x=5
-	end
 	axo_mode = [5, 2, 1, 4, 0, 3]
 	axo_desc = ["I-Clamp Fast", "I-Clamp", "I=0", "Track", "N/A", "V-Clamp"]
-	v_in=x in [0,3]
 	m=Int(round(x))
-	return axo_mode[m], axo_desc[m],v_in
+	if m==0
+		m=5
+	end
+	i_in=m in [4,5,6]
+	return axo_mode[m], axo_desc[m],i_in
 end
 
-function generate_pulse(width, amplitude, number)
-    x=zeros(Int(round(SAMPLE_RATE*width)))
-	x=vcat(x, x.+amplitude)
+function generate_pulse(width, isi, amplitude, number)
+    x=zeros(Int(round(SAMPLE_RATE*isi)))
+    y=zeros(Int(round(SAMPLE_RATE*width)))
+	x=vcat(x, y.+amplitude*O_c)
 	out=x
 	for i in 2:number
 		out=vcat(out,x)
@@ -88,7 +105,7 @@ function res_test(;debug=false)
 		pulse_time=0.2
 		dur=pulse_time*2+0.1
 		println("SEAL TEST \n")
-		stim=generate_pulse(pulse_time, 0.5, 1)
+		stim=generate_pulse(pulse_time, pulse_time, 0.5, 1)
 		res_fig=Figure(backgroundcolor=RGBf(0.8,0.8,0.8),resolution=(1200,900))
 		end_loop = Button(res_fig[2,1], label="Stop seal test", textsize=30,tellwidth=false)
 		on(end_loop.clicks) do x
@@ -132,8 +149,8 @@ function res_test(;debug=false)
 	end
 end
 
-function stim_pulse(h,w,n)
-	stim=generate_pulse(w,h,n)
+function stim_pulse(h,w,i,n)
+	stim=generate_pulse(w,i,h,n)
 	dur=w*2*n+0.1
 	NIDAQ.write(a_out,stim)
 	sleep(dur)
@@ -144,22 +161,30 @@ function read_loop()
 	println("STARTED \n")
 	while MASTER_SWITCH[]
 		data = NIDAQ.read(a_in)
-		append!(i_buf,data[:,2])
-		append!(o_buf,data[:,1])
+		append!(i_buf,data[:,2]*I_c)
+		append!(o_buf,data[:,1]*O_c)
+		if size(data)[1]>0
+			mode[] = data[end, 3]
+			if mode[]!=m_vec[end]
+				if voltage_to_mode(mode[])[3]
+					global I_c=I_I
+					global O_c=I_O
+					ylims!(ax_i,I_I_Y_L,I_I_Y_H)
+				else
+					global I_c=V_I
+					global O_c=V_O
+				end
+			end
+		end
 		if recording[]
 			append!(i_vec,data[:,2])
 			append!(o_vec,data[:,1])
+			append!(m_vec,data[:,3])
 		end
 		read_length+=size(data)[1]
 		if read_length>=PLOT_TS
 			notify(update)
 			read_length=0
-		end
-		# if mode[] != Int(round(data[end,3]))
-		#	println("Why would you change modes while recording!?!?!?")
-		# end
-		if size(data)[1]>0
-			mode[] = Int(round(data[end, 3]))
 		end
 		sleep(0.001)
 	end
@@ -181,6 +206,10 @@ function bye()
 end
 
 #PLOT ELEMENTS
+
+fontsize_theme = Theme(fontsize = 20)
+set_theme!(fontsize_theme)
+
 figure=Figure(backgroundcolor=RGBf(0.8,0.8,0.8),resolution=(1200,900))
 
 a=figure[1,1:2] = GridLayout()
@@ -188,33 +217,36 @@ b=figure[2,1:2] = GridLayout()
 c=figure[1:2,3] = GridLayout()
 
 
-ax_i=Axis(a[1,1],ylabel="Input",xlims=(X_L,X_H), ylims=(I_Y_L,I_Y_H))
-ax_o=Axis(b[1,1],xlabel="Time",ylabel="Output",xlims=(X_L,X_H), ylims=(O_Y_L,O_Y_H))
+ax_i=Axis(a[1,1],ylabel=@lift(voltage_to_mode($mode)[3] ?  "Voltage Input (mV)" : "Current Output (nA)"),xlims=(X_L,X_H), ylims=(V_I_Y_L,V_I_Y_H))
+ax_o=Axis(b[1,1],xlabel="Time",ylabel=@lift(voltage_to_mode($mode)[3] ?  "Current Input (nA)" : "Voltage Output (mV)"),xlims=(X_L,X_H), ylims=(V_O_Y_L,V_O_Y_H))
 
 seal_test_rm= Label(c[2,1], "R_m: N/A", textsize =24, tellwidth=false)
-seal_test_rs= Label(c[2,3], "R_s: N/A", textsize =24, tellwidth=false)
+seal_test_rs= Label(c[2,2], "R_s: N/A", textsize =24, tellwidth=false)
 
 noise_label= Label(c[3,:], "Noise: N/A", textsize =24, tellwidth=false)
 
-mode_label=Label(c[11,:], @lift("Mode: "*voltage_to_mode($mode)[2]),textsize=24, tellwidth=false) 
+mode_label=Label(c[12,:], @lift("Mode: "*voltage_to_mode($mode)[2]),textsize=24, tellwidth=false) 
 
 
-reset_plot=Button(c[8,:], label="Reset plot limits", textsize=30, tellwidth=false) 
+reset_plot=Button(c[9,:], label="Reset plot limits", textsize=30, tellwidth=false) 
 
 
 
-stim_h=Textbox(c[5,1], placeholder="H",validator = Float64,tellwidth=false, textsize=24)
-stim_w=Textbox(c[5,2], placeholder="W",validator = Float64,tellwidth=false, textsize=24)
-stim_n=Textbox(c[5,3], placeholder="N",validator = Int,tellwidth=false,textsize=24)
+stim_w=Textbox(c[5,1], placeholder="W",validator = Float64,tellwidth=false, textsize=24)
+stim_i=Textbox(c[5,2], placeholder="I",validator = Float64,tellwidth=false, textsize=24)
+stim_h=Textbox(c[6,1], placeholder="H",validator = Float64,tellwidth=false, textsize=24)
+stim_n=Textbox(c[6,2], placeholder="N",validator = Int,tellwidth=false,textsize=24)
 
-stim_trig=Button(c[6,:], label="Stimulate", textsize=30, tellwidth=false) 
+stim_trig=Button(c[7,:], label="Stimulate", textsize=30, tellwidth=false) 
 
 
-switch=Button(c[10,:], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellwidth=false) 
+switch=Button(c[11,:], label=@lift($recording ? "Stop recording" : "Start recording"), textsize=30, tellwidth=false) 
 seal_test_button = Button(c[1,:], label="Run seal test", textsize=30,tellwidth=false)
 
 #LISTENERS
 on(switch.clicks) do x
+	append!(i_vec,zeros(5))
+	append!(o_vec,zeros(5))
 	recording[] = 1-recording[]
 #	println("Pressed")
 end
@@ -229,13 +261,15 @@ end
 
 on(stim_trig.clicks) do x
 	try
-		h,w,n=parse(Float64,stim_h.stored_string[]),parse(Float64,stim_w.stored_string[]),parse(Int,stim_n.stored_string[])
+		h,w,i,n=parse(Float64,stim_h.stored_string[]),parse(Float64,stim_w.stored_string[]),parse(Float64,stim_i.stored_string[]),parse(Int,stim_n.stored_string[])
 		println("Starting stim protocol\n H:$h, W:$w, N:$n, T:$(w*2*n) s")
 		stim_pulse(h,w,n)
 	catch
 		println("Enter all values.")
 	end
 end
+
+
 
 
 reset_vars()
@@ -247,6 +281,4 @@ lines!(ax_o,t_vec,@lift(o_buf[$update:DISPLAY_TS]))
 
 display(figure)
 
-
 @tspawnat 1 read_loop()
-

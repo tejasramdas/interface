@@ -1,0 +1,12 @@
+EXT. COMMAND INPUT 
+V-Clamp: 20 mV/V
+I-Clamp: 2 nA/V
+(with beta=1, multiplier=x1)
+Page 52 of https://www.autom8.com/wp-content/uploads/2016/07/Axopatch-200B.pdf
+
+SCALED OUTPUT
+V-CLamp: 1 V/nA
+I-Clamp: 1 V/V 
+(with alpha=1, beta=1)
+Page 66 of https://www.autom8.com/wp-content/uploads/2016/07/Axopatch-200B.pdf
+
