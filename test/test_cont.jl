@@ -5,7 +5,7 @@ a_in=analog_input("Dev2/ai0")
 
 a_in=analog_input("Dev2/ai2")
 
-a_in=analog_input("Dev2/ai3")
+a_in=analog_input("Dev2/ai4")
 
 NIDAQ.CfgSampClkTiming(a_in.th, convert(Ref{UInt8},b""), 10000, NIDAQ.Val_Rising, NIDAQ.Val_ContSamps, 50000)
 
@@ -17,9 +17,10 @@ t_obs=Observable(1)
 f=Figure()
 a=Axis(f[1,1])
 
-ylims!(a,-1,12)
+ylims!(a,-1,1)
+xlims!(a,0,10)
 
-lines!(a,@lift(vec[$t_obs:end]))
+lines!(a,(1:100000)/10000,@lift(vec[$t_obs:end]))
 
 a_out=analog_output("Dev2/ao0")
 
